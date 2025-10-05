@@ -51,23 +51,6 @@ def check_docker():
     
     print_success("Docker is installed and running")
 
-def check_docker_compose():
-    """Check if Docker Compose is available"""
-    print_status("Checking Docker Compose...")
-    
-    # Try docker compose (new version)
-    if run_command(["docker", "compose", "version"]):
-        print_success("Docker Compose is available")
-        return "docker compose"
-    
-    # Try docker-compose (old version)
-    if run_command(["docker-compose", "--version"]):
-        print_success("Docker Compose is available")
-        return "docker-compose"
-    
-    print_error("Docker Compose is not installed. Please install Docker Compose first.")
-    sys.exit(1)
-
 def get_user_input():
     """Get user input interactively"""
     print_status("Traefik Setup Configuration")
@@ -83,6 +66,29 @@ def get_user_input():
             sys.exit(0)
     
     return email, test_domain
+
+def check_dns_resolution(domain):
+    """Check if domain resolves to this server"""
+    print_status(f"Checking DNS resolution for {domain}...")
+    
+    try:
+        # Get server's public IP using external service
+        result = subprocess.run(["curl", "-4s", "https://api.ipify.org"], 
+                              capture_output=True, text=True)
+        if result.returncode == 0:
+            server_ip = result.stdout.strip()
+            print_warning(f"⚠️  Make sure {domain} DNS A record points to: {server_ip}")
+            print_warning("If DNS is not configured, the test page won't be accessible")
+            
+            # Quick DNS check
+            dns_check = subprocess.run(["nslookup", domain], capture_output=True, text=True)
+            if dns_check.returncode != 0:
+                print_warning(f"❌ DNS lookup failed for {domain}")
+            else:
+                print_success(f"✅ DNS lookup successful for {domain}")
+                
+    except Exception as e:
+        print_warning(f"Could not determine server IP. Please ensure {domain} points to your server.")
 
 def create_directories():
     """Create necessary directories"""
@@ -101,8 +107,7 @@ def create_traefik_config(email):
     """Create Traefik configuration file"""
     config_content = f"""# Traefik Global Configuration
 api:
-  dashboard: true
-  insecure: true
+  dashboard: false
 
 entryPoints:
   web:
@@ -152,12 +157,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /etc/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - /etc/traefik/certs:/etc/traefik/certs
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`traefik.${TEST_DOMAIN:-localhost}`)"
-      - "traefik.http.routers.traefik.service=api@internal"
-      - "traefik.http.routers.traefik.entrypoints=websecure"
-      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
 
 networks:
   traefik:
@@ -201,13 +200,6 @@ networks:
     
     print_success("Test page configuration created")
 
-def create_env_file(test_domain):
-    """Create environment file"""
-    if test_domain:
-        with open("/opt/traefik/.env", "w") as f:
-            f.write(f"TEST_DOMAIN={test_domain}")
-        print_success("Environment file created")
-
 def setup_docker_network():
     """Create Docker network if it doesn't exist"""
     print_status("Setting up Docker network...")
@@ -221,20 +213,17 @@ def setup_docker_network():
     else:
         print_warning("Docker network 'traefik' already exists")
 
-def deploy_traefik(compose_cmd):
+def deploy_traefik():
     """Deploy Traefik"""
     print_status("Deploying Traefik...")
     
     os.chdir("/opt/traefik")
     
-    # Pull latest images
-    run_command(f"{compose_cmd} pull", shell=True)
-    
     # Start services
-    if run_command(f"{compose_cmd} up -d", shell=True):
+    if run_command("docker compose up -d", shell=True):
         print_success("Traefik deployed successfully")
 
-def deploy_test_page(compose_cmd, test_domain):
+def deploy_test_page(test_domain):
     """Deploy test page and schedule auto-removal"""
     if not test_domain:
         return
@@ -243,7 +232,7 @@ def deploy_test_page(compose_cmd, test_domain):
     
     os.chdir("/opt/traefik")
     
-    if run_command(f"{compose_cmd} -f docker-compose-test.yml up -d", shell=True):
+    if run_command("docker compose -f docker-compose-test.yml up -d", shell=True):
         print_success(f"Test page deployed at https://{test_domain}")
         
         # Schedule auto-removal
@@ -251,7 +240,7 @@ def deploy_test_page(compose_cmd, test_domain):
 sleep 600
 echo ""
 echo "⏰ Time is up! Removing test page..."
-{compose_cmd} -f /opt/traefik/docker-compose-test.yml down
+docker compose -f /opt/traefik/docker-compose-test.yml down
 rm -f /opt/traefik/docker-compose-test.yml
 echo "✅ Test page removed successfully"
 """
@@ -281,9 +270,6 @@ def display_final_info(test_domain):
         print(f"  • https://{test_domain}")
         print("")
         print("⏰ Test page will auto-remove in 10 minutes")
-        print("")
-        print("🔧 Traefik dashboard:")
-        print(f"  • https://traefik.{test_domain}")
     else:
         print("No test domain provided - only Traefik is running.")
         print("You can add services by:")
@@ -292,12 +278,12 @@ def display_final_info(test_domain):
     
     print("")
     print("To manage Traefik:")
-    print("  cd /opt/traefik && docker-compose [logs|restart|down]")
+    print("  cd /opt/traefik && docker compose [logs|restart|down]")
     print("")
     
     if test_domain:
         print("To manually remove test page early:")
-        print("  cd /opt/traefik && docker-compose -f docker-compose-test.yml down")
+        print("  cd /opt/traefik && docker compose -f docker-compose-test.yml down")
 
 def main():
     """Main setup function"""
@@ -305,22 +291,24 @@ def main():
     
     # Check prerequisites
     check_docker()
-    compose_cmd = check_docker_compose()
     
     # Get user input
     email, test_domain = get_user_input()
+    
+    # Check DNS if domain provided
+    if test_domain:
+        check_dns_resolution(test_domain)
     
     # Setup
     create_directories()
     create_traefik_config(email)
     create_traefik_compose()
     create_test_compose(test_domain)
-    create_env_file(test_domain)
     setup_docker_network()
     
     # Deploy
-    deploy_traefik(compose_cmd)
-    deploy_test_page(compose_cmd, test_domain)
+    deploy_traefik()
+    deploy_test_page(test_domain)
     
     # Final info
     display_final_info(test_domain)
