@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>It's working!</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            padding: 3rem;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            max-width: 500px;
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+        .emoji {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        .countdown {
+            font-size: 1.2rem;
+            margin: 1rem 0;
+            padding: 0.5rem;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+        }
+        .info {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-top: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="emoji">🎉</div>
+        <h1>It's Working!</h1>
+        <p>Your Traefik setup is successfully configured!</p>
+
+        <div class="countdown" id="countdown">
+            This test page will auto-remove in: <strong id="timer">10:00</strong>
+        </div>
+
+        <div class="info">
+            <p>Traefik is running and ready to serve your applications.</p>
+            <p>This temporary page will be automatically removed.</p>
+        </div>
+    </div>
+
+    <script>
+        // Countdown timer (10 minutes)
+        let timeLeft = 10 * 60; // 10 minutes in seconds
+
+        function updateTimer() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            document.getElementById('timer').textContent =
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+            if (timeLeft > 0) {
+                timeLeft--;
+                setTimeout(updateTimer, 1000);
+            } else {
+                document.getElementById('timer').textContent = 'Removing...';
+            }
+        }
+
+        updateTimer();
+    </script>
+</body>
+</html>
