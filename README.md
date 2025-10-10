@@ -64,6 +64,35 @@ docker compose logs -f
 docker compose restart
 ```
 
+## 🚀 Adding Your Applications
+
+After Traefik is set up, you can deploy any application by adding it to the `traefik` network and using the appropriate labels. Here's an example:
+
+```yaml
+services:
+  your-app-name:
+    image: your-app-image:latest
+    restart: unless-stopped
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.your-app-name.rule=Host(`yoursubdomain.yourdomain.com`)"
+      - "traefik.http.routers.your-app-name.entrypoints=websecure"
+      - "traefik.http.routers.your-app-name.tls.certresolver=letsencrypt"
+
+networks:
+  traefik:
+    external: true
+```
+### Key Points:
+- Replace `your-app-name` with your actual application name
+- Replace `yoursubdomain.yourdomain.com` with your actual domain
+- The application must be on the `traefik` network
+- SSL certificates are automatically handled by Let's Encrypt
+
+---
+
 ## 👨‍💻 Author
 
 **SoftsWeb**  
@@ -75,3 +104,4 @@ docker compose restart
 **⭐ If you find this useful, please give it a star on GitHub!**
 
 **📺 Don't forget to watch the [video tutorial](https://youtu.be/CY8nyQ_utB0) for a complete walkthrough!**
+
