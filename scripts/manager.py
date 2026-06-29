@@ -105,6 +105,11 @@ def create_directories():
 
 def create_traefik_config(email):
     """Create Traefik configuration file"""
+    # Only write an email line if the user actually provided one. Let's Encrypt
+    # rejects placeholder addresses like admin@example.com ("forbidden domain"),
+    # which would stop every certificate from being issued. ACME works fine with
+    # no contact email, so we simply omit it when none is given.
+    email_line = f"      email: {email}\n" if email else ""
     config_content = f"""# Traefik Global Configuration
 api:
   dashboard: false
@@ -128,8 +133,7 @@ providers:
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: {email or "admin@example.com"}
-      storage: /etc/traefik/certs/acme.json
+{email_line}      storage: /etc/traefik/certs/acme.json
       httpChallenge:
         entryPoint: web
 """
